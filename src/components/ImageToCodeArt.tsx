@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Textarea } from "~/components/ui/textarea";
 import { Badge } from "~/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { useToast } from "~/hooks/use-toast";
+import dynamic from "next/dynamic";
 
 interface ImageData {
   width: number;
@@ -14,11 +16,30 @@ interface ImageData {
   pixels: Uint8ClampedArray;
 }
 
+type ArtStyle = 'pixels' | 'circles' | 'triangles' | 'lines' | 'dots' | 'ascii';
+
+interface ArtStyleConfig {
+  name: string;
+  description: string;
+}
+
+const artStyles: Record<ArtStyle, ArtStyleConfig> = {
+  pixels: { name: "Pixel Art", description: "Classic pixel-based representation" },
+  circles: { name: "Circle Dots", description: "Circular dots creating the image" },
+  triangles: { name: "Triangle Mosaic", description: "Triangular shapes forming patterns" },
+  lines: { name: "Line Art", description: "Vertical lines with varying thickness" },
+  dots: { name: "Dot Matrix", description: "Small dots with size based on brightness" },
+  ascii: { name: "ASCII Art", description: "Text characters representing pixels" }
+};
+
 export default function ImageToCodeArt() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const [generatedCode, setGeneratedCode] = useState<string>("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [artStyle, setArtStyle] = useState<ArtStyle>('pixels');
+  const [showPreview, setShowPreview] = useState(false);
+  const previewRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   const analyzeImage = useCallback((file: File): Promise<ImageData> => {
@@ -51,78 +72,172 @@ export default function ImageToCodeArt() {
     });
   }, []);
 
-  const generateP5Code = useCallback((imageData: ImageData): string => {
+  const generateP5Code = useCallback((imageData: ImageData, style: ArtStyle): string => {
     const { width, height, pixels } = imageData;
     const scale = Math.min(400 / width, 400 / height);
     const scaledWidth = Math.floor(width * scale);
     const scaledHeight = Math.floor(height * scale);
-    const pixelSize = Math.max(1, Math.floor(4 / scale));
+    const step = Math.max(1, Math.floor(8 / scale));
 
-    let code = `function setup() {
+    let setupCode = `function setup() {
   createCanvas(${scaledWidth}, ${scaledHeight});
   noLoop();
   background(255);
 }
 
-function draw() {
-  noStroke();
-  
-  // Convert image to pixel art
-`;
+function draw() {`;
 
-    for (let y = 0; y < height; y += Math.ceil(pixelSize / scale)) {
-      for (let x = 0; x < width; x += Math.ceil(pixelSize / scale)) {
-        const pixelIndex = (y * width + x) * 4;
-        const r = pixels[pixelIndex];
-        const g = pixels[pixelIndex + 1];
-        const b = pixels[pixelIndex + 2];
-        const a = pixels[pixelIndex + 3];
+    let drawCode = '';
 
-        if (a > 0) {
-          const scaledX = Math.floor(x * scale);
-          const scaledY = Math.floor(y * scale);
-          
-          code += `  fill(${r}, ${g}, ${b}, ${a});
-  rect(${scaledX}, ${scaledY}, ${pixelSize}, ${pixelSize});
-`;
+    switch (style) {
+      case 'pixels':
+        setupCode += `
+  noStroke();`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              drawCode += `
+  fill(${r}, ${g}, ${b});
+  rect(${scaledX}, ${scaledY}, ${Math.ceil(step * scale)}, ${Math.ceil(step * scale)});`;
+            }
+          }
         }
-      }
+        break;
+
+      case 'circles':
+        setupCode += `
+  noStroke();`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              const size = Math.ceil(step * scale);
+              drawCode += `
+  fill(${r}, ${g}, ${b});
+  circle(${scaledX + size/2}, ${scaledY + size/2}, ${size});`;
+            }
+          }
+        }
+        break;
+
+      case 'triangles':
+        setupCode += `
+  noStroke();`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              const size = Math.ceil(step * scale);
+              drawCode += `
+  fill(${r}, ${g}, ${b});
+  triangle(${scaledX + size/2}, ${scaledY}, ${scaledX}, ${scaledY + size}, ${scaledX + size}, ${scaledY + size});`;
+            }
+          }
+        }
+        break;
+
+      case 'lines':
+        setupCode += `
+  strokeCap(SQUARE);`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const brightness = (r + g + b) / 3;
+              const lineHeight = brightness / 255 * (step * scale - 1) + 1;
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              drawCode += `
+  stroke(${r}, ${g}, ${b});
+  strokeWeight(${Math.ceil(step * scale * 0.8)});
+  line(${scaledX}, ${scaledY}, ${scaledX}, ${scaledY + lineHeight});`;
+            }
+          }
+        }
+        break;
+
+      case 'dots':
+        setupCode += `
+  noStroke();`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const brightness = (r + g + b) / 3;
+              const dotSize = brightness / 255 * (step * scale - 1) + 1;
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              drawCode += `
+  fill(${r}, ${g}, ${b});
+  circle(${scaledX + step * scale / 2}, ${scaledY + step * scale / 2}, ${dotSize});`;
+            }
+          }
+        }
+        break;
+
+      case 'ascii':
+        setupCode += `
+  textAlign(CENTER, CENTER);
+  textSize(${Math.ceil(step * scale * 0.8)});
+  fill(0);`;
+        const chars = '@%#*+=-:. ';
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const brightness = (r + g + b) / 3;
+              const charIndex = Math.floor((1 - brightness / 255) * (chars.length - 1));
+              const char = chars[charIndex];
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              drawCode += `
+  text("${char}", ${scaledX + step * scale / 2}, ${scaledY + step * scale / 2});`;
+            }
+          }
+        }
+        break;
     }
 
-    code += `}
+    const fullCode = setupCode + drawCode + `
+}
 
-// Alternative artistic interpretations:
+// Helper function for mapping values
+function map(value, start1, stop1, start2, stop2) {
+  return start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
+}`;
 
-// Circles instead of rectangles
-function drawCircles() {
-  background(255);
-  noStroke();
-`;
-
-    for (let y = 0; y < height; y += Math.ceil(pixelSize * 2 / scale)) {
-      for (let x = 0; x < width; x += Math.ceil(pixelSize * 2 / scale)) {
-        const pixelIndex = (y * width + x) * 4;
-        const r = pixels[pixelIndex];
-        const g = pixels[pixelIndex + 1];
-        const b = pixels[pixelIndex + 2];
-        const a = pixels[pixelIndex + 3];
-
-        if (a > 0) {
-          const scaledX = Math.floor(x * scale);
-          const scaledY = Math.floor(y * scale);
-          
-          code += `  fill(${r}, ${g}, ${b}, ${a});
-  circle(${scaledX + pixelSize/2}, ${scaledY + pixelSize/2}, ${pixelSize});
-`;
-        }
-      }
-    }
-
-    code += `}
-
-// Call drawCircles() in draw() function for circle version`;
-
-    return code;
+    return fullCode;
   }, []);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -150,12 +265,13 @@ function drawCircles() {
     setIsProcessing(true);
     try {
       const imageData = await analyzeImage(selectedFile);
-      const code = generateP5Code(imageData);
+      const code = generateP5Code(imageData, artStyle);
       setGeneratedCode(code);
+      setShowPreview(false);
       
       toast({
         title: "Conversion complete",
-        description: "Your image has been converted to p5.js code!"
+        description: `Your image has been converted to ${artStyles[artStyle].name} p5.js code!`
       });
     } catch (error) {
       toast({
@@ -166,7 +282,7 @@ function drawCircles() {
     } finally {
       setIsProcessing(false);
     }
-  }, [selectedFile, analyzeImage, generateP5Code, toast]);
+  }, [selectedFile, artStyle, analyzeImage, generateP5Code, toast]);
 
   const handleCopyCode = useCallback(async () => {
     if (!generatedCode) return;
@@ -185,6 +301,50 @@ function drawCircles() {
       });
     }
   }, [generatedCode, toast]);
+
+  const handlePreview = useCallback(() => {
+    if (!generatedCode) return;
+
+    if (showPreview) {
+      setShowPreview(false);
+      return;
+    }
+
+    setShowPreview(true);
+  }, [generatedCode, showPreview]);
+
+  // Effect to handle iframe creation when preview becomes visible
+  useEffect(() => {
+    if (!showPreview || !generatedCode || !previewRef.current) return;
+
+    // Clear previous preview
+    previewRef.current.innerHTML = '';
+
+    // Create iframe for p5.js preview
+    const iframe = document.createElement('iframe');
+    iframe.style.width = '100%';
+    iframe.style.height = '400px';
+    iframe.style.border = '1px solid #e2e8f0';
+    iframe.style.borderRadius = '8px';
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.7.0/p5.min.js"></script>
+        <style>body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f8f9fa; }</style>
+      </head>
+      <body>
+        <script>
+          ${generatedCode}
+        </script>
+      </body>
+      </html>
+    `;
+
+    iframe.srcdoc = htmlContent;
+    previewRef.current.appendChild(iframe);
+  }, [showPreview, generatedCode]);
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -206,16 +366,41 @@ function drawCircles() {
             
             {previewUrl && (
               <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Art Style</label>
+                    <Select value={artStyle} onValueChange={(value: ArtStyle) => setArtStyle(value)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(artStyles).map(([key, style]) => (
+                          <SelectItem key={key} value={key}>
+                            <div>
+                              <div className="font-medium">{style.name}</div>
+                              <div className="text-xs text-muted-foreground">{style.description}</div>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="flex items-end">
+                    <Button 
+                      onClick={handleConvert}
+                      disabled={isProcessing}
+                      className="w-full"
+                    >
+                      {isProcessing ? "Converting..." : "Convert to p5.js"}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <Badge variant="secondary">
                     {selectedFile?.name}
                   </Badge>
-                  <Button 
-                    onClick={handleConvert}
-                    disabled={isProcessing}
-                  >
-                    {isProcessing ? "Converting..." : "Convert to p5.js"}
-                  </Button>
                 </div>
                 
                 <div className="border rounded-lg p-4 bg-gray-50">
@@ -232,29 +417,50 @@ function drawCircles() {
       </Card>
 
       {generatedCode && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Generated p5.js Code</CardTitle>
-                <CardDescription>
-                  Copy and paste this code into a p5.js editor to see your art
-                </CardDescription>
+        <>
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Generated p5.js Code</CardTitle>
+                  <CardDescription>
+                    Copy and paste this code into a p5.js editor to see your art
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handlePreview} variant="outline">
+                    {showPreview ? "Hide Preview" : "Live Preview"}
+                  </Button>
+                  <Button onClick={handleCopyCode} variant="outline">
+                    Copy Code
+                  </Button>
+                </div>
               </div>
-              <Button onClick={handleCopyCode} variant="outline">
-                Copy Code
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              value={generatedCode}
-              readOnly
-              className="min-h-96 font-mono text-sm"
-              placeholder="Generated code will appear here..."
-            />
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent>
+              <Textarea
+                value={generatedCode}
+                readOnly
+                className="min-h-96 font-mono text-sm"
+                placeholder="Generated code will appear here..."
+              />
+            </CardContent>
+          </Card>
+
+          {showPreview && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Live Preview</CardTitle>
+                <CardDescription>
+                  Interactive p5.js canvas showing your generated art
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div ref={previewRef} className="w-full"></div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       )}
     </div>
   );
