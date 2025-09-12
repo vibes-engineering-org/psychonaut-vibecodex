@@ -1,20 +1,22 @@
 "use client";
 
-import { PROJECT_TITLE } from "~/lib/constants";
+import ImageToCodeArt from "~/components/ImageToCodeArt";
 
 export default function App() {
   return (
-    <div className="w-[400px] mx-auto py-8 px-4 min-h-screen flex flex-col items-center justify-center">
-      {/* TEMPLATE_CONTENT_START - Replace content below */}
-      <div className="space-y-6 text-center">
-        <h1 className="text-4xl font-semibold tracking-tight">
-          {PROJECT_TITLE}
-        </h1>
-        <p className="text-lg text-muted-foreground">
-          Ready to launch
-        </p>
+    <div className="max-w-6xl mx-auto py-8 px-4 min-h-screen">
+      <div className="space-y-8">
+        <div className="text-center space-y-4">
+          <h1 className="text-4xl font-semibold tracking-tight">
+            Image to Code Art
+          </h1>
+          <p className="text-lg text-muted-foreground">
+            Transform your images into beautiful p5.js code art
+          </p>
+        </div>
+        
+        <ImageToCodeArt />
       </div>
-      {/* TEMPLATE_CONTENT_END */}
     </div>
   );
 }
