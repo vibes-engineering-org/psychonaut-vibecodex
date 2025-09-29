@@ -16,7 +16,7 @@ interface ImageData {
   pixels: Uint8ClampedArray;
 }
 
-type ArtStyle = 'pixels' | 'circles' | 'triangles' | 'lines' | 'dots' | 'ascii';
+type ArtStyle = 'pixels' | 'circles' | 'triangles' | 'lines' | 'dots' | 'ascii' | 'psychedelic' | 'statue' | 'animation';
 
 interface ArtStyleConfig {
   name: string;
@@ -29,7 +29,10 @@ const artStyles: Record<ArtStyle, ArtStyleConfig> = {
   triangles: { name: "Triangle Mosaic", description: "Triangular shapes forming patterns" },
   lines: { name: "Line Art", description: "Vertical lines with varying thickness" },
   dots: { name: "Dot Matrix", description: "Small dots with size based on brightness" },
-  ascii: { name: "ASCII Art", description: "Text characters representing pixels" }
+  ascii: { name: "ASCII Art", description: "Text characters representing pixels" },
+  psychedelic: { name: "Psychedelic Filter", description: "Trippy colors and distorted patterns" },
+  statue: { name: "Marble Statue", description: "Classical marble statue effect" },
+  animation: { name: "Animated GIF", description: "Convert to animated p5.js sketch" }
 };
 
 export default function ImageToCodeArt() {
@@ -227,6 +230,95 @@ function draw() {`;
           }
         }
         break;
+
+      case 'psychedelic':
+        setupCode = `function setup() {
+  createCanvas(${scaledWidth}, ${scaledHeight});
+  colorMode(HSB, 360, 100, 100);
+  noStroke();
+}
+
+let time = 0;
+
+function draw() {
+  time += 0.02;`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const brightness = (r + g + b) / 3;
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              drawCode += `
+  let hue = (${brightness} + sin(time + ${x * 0.01}) * 50 + cos(time + ${y * 0.01}) * 30) % 360;
+  let sat = 80 + sin(time * 2 + ${x * 0.02}) * 20;
+  let bright = 70 + sin(time * 1.5 + ${y * 0.02}) * 30;
+  fill(hue, sat, bright);
+  let size = ${Math.ceil(step * scale)} + sin(time + ${x * 0.03} + ${y * 0.03}) * 3;
+  ellipse(${scaledX + step * scale / 2}, ${scaledY + step * scale / 2}, size, size);`;
+            }
+          }
+        }
+        break;
+
+      case 'statue':
+        setupCode += `
+  noStroke();`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const brightness = (r + g + b) / 3;
+              // Convert to marble-like grayscale with blue tint
+              const marbleValue = Math.floor(brightness * 0.8 + 40);
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              drawCode += `
+  fill(${marbleValue - 20}, ${marbleValue - 10}, ${marbleValue + 15});
+  rect(${scaledX}, ${scaledY}, ${Math.ceil(step * scale)}, ${Math.ceil(step * scale)});`;
+            }
+          }
+        }
+        break;
+
+      case 'animation':
+        setupCode = `function setup() {
+  createCanvas(${scaledWidth}, ${scaledHeight});
+  noStroke();
+}
+
+let frame = 0;
+
+function draw() {
+  background(255);
+  frame += 0.05;`;
+        for (let y = 0; y < height; y += step) {
+          for (let x = 0; x < width; x += step) {
+            const pixelIndex = (y * width + x) * 4;
+            const r = pixels[pixelIndex];
+            const g = pixels[pixelIndex + 1];
+            const b = pixels[pixelIndex + 2];
+            const a = pixels[pixelIndex + 3];
+            if (a > 128) {
+              const scaledX = Math.floor(x * scale);
+              const scaledY = Math.floor(y * scale);
+              drawCode += `
+  let wave = sin(frame + ${x * 0.02} + ${y * 0.02}) * 5;
+  let alpha = 200 + sin(frame * 2 + ${x * 0.01}) * 55;
+  fill(${r}, ${g}, ${b}, alpha);
+  circle(${scaledX + step * scale / 2} + wave, ${scaledY + step * scale / 2} + wave * 0.5, ${Math.ceil(step * scale)});`;
+            }
+          }
+        }
+        break;
     }
 
     const fullCode = setupCode + drawCode + `
@@ -387,10 +479,10 @@ function map(value, start1, stop1, start2, stop2) {
                   </div>
                   
                   <div className="flex items-end">
-                    <Button 
+                    <Button
                       onClick={handleConvert}
                       disabled={isProcessing}
-                      className="w-full"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       {isProcessing ? "Converting..." : "Convert to p5.js"}
                     </Button>
@@ -428,10 +520,10 @@ function map(value, start1, stop1, start2, stop2) {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button onClick={handlePreview} variant="outline">
+                  <Button onClick={handlePreview} variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50">
                     {showPreview ? "Hide Preview" : "Live Preview"}
                   </Button>
-                  <Button onClick={handleCopyCode} variant="outline">
+                  <Button onClick={handleCopyCode} variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50">
                     Copy Code
                   </Button>
                 </div>
